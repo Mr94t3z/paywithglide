@@ -14,6 +14,7 @@
     "hono": "^4",
     "parse-full-name": "^1.2.6",
     "truncate-utf8-bytes": "^1.0.2",
+    "uni-farcaster-sdk": "latest",
     "viem": "^2.17.4"
   },
   "devDependencies": {

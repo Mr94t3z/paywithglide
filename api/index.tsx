@@ -1,27 +1,20 @@
-import { Button, Frog, TextInput } from 'frog'
-import { handle } from 'frog/vercel'
-import { neynar } from 'frog/middlewares'
-import {
-  Box,
-  Image,
-  Icon,
-  Text,
-  Spacer,
-  vars
-} from "../lib/ui.js";
+import { Button, Frog, TextInput } from "frog";
+import { handle } from "frog/vercel";
+import { neynar } from "frog/middlewares";
+import { Box, Image, Icon, Text, Spacer, vars } from "../lib/ui.js";
 import {
   chains,
   currencies,
   createSession,
   CurrencyNotSupportedError,
   getSessionById,
-  updatePaymentTransaction
+  updatePaymentTransaction,
 } from "@paywithglide/glide-js";
-import { glideConfig } from "../lib/config.js"
-import { formatUnits, hexToBigInt } from 'viem';
-import { parseFullName } from 'parse-full-name';
+import { glideConfig, sdkInstance } from "../lib/config.js";
+import { formatUnits, hexToBigInt } from "viem";
+import { parseFullName } from "parse-full-name";
 import truncate from "truncate-utf8-bytes";
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 
 // Uncomment this packages to tested on local server
 // import { devtools } from 'frog/dev'
@@ -30,64 +23,20 @@ import dotenv from 'dotenv';
 // Load environment variables from .env file
 dotenv.config();
 
-
 const baseUrl = "https://warpcast.com/~/compose";
-const text = "Pay with Glide - send tokens to anyone from any chain\n\nFrame by @tusharsoni.eth & @0x94t3z.eth";
+const text =
+  "Pay with Glide - send tokens to anyone from any chain\n\nFrame by @tusharsoni.eth & @0x94t3z.eth";
 const embedUrl = "https://paywithglide.0x94t3z.tech/api/frame";
 
-const CAST_INTENS = `${baseUrl}?text=${encodeURIComponent(text)}&embeds[]=${encodeURIComponent(embedUrl)}`;
-
-const baseUrlNeynarV2 = process.env.BASE_URL_NEYNAR_V2;
-
-// Cache to store user data
-const cache = new Map();
-
-// Function to fetch data with retries
-async function fetchWithRetry(url: string | URL | Request, options: RequestInit | undefined, retries = 5, delay = 1000) {
-  for (let i = 0; i < retries; i++) {
-    const response = await fetch(url, options);
-    if (response.ok) {
-      return response.json();
-    }
-    if (response.status === 429 && i < retries - 1) {
-      await new Promise(resolve => setTimeout(resolve, delay));
-      delay *= 2;
-    } else {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-  }
-}
-
-// Function to fetch user data by fid
-async function fetchUserData(fid: string) {
-  if (cache.has(fid)) {
-    return cache.get(fid);
-  }
-
-  const url = `${baseUrlNeynarV2}/user/bulk?fids=${fid}`;
-  const options = {
-    method: 'GET',
-    headers: {
-      'accept': 'application/json',
-      'api_key': process.env.NEYNAR_API_KEY || '',
-    },
-  };
-
-  const data = await fetchWithRetry(url, options);
-  if (!data || !data.users || data.users.length === 0) {
-    throw new Error('User not found!');
-  }
-
-  const user = data.users[0];
-  cache.set(fid, user);
-  return user;
-}
+const CAST_INTENS = `${baseUrl}?text=${encodeURIComponent(
+  text
+)}&embeds[]=${encodeURIComponent(embedUrl)}`;
 
 export const app = new Frog({
-  assetsPath: '/',
-  basePath: '/api/frame',
+  assetsPath: "/",
+  basePath: "/api/frame",
   ui: { vars },
-  title: 'PayWithGlide.xyz',
+  title: "PayWithGlide.xyz",
   imageAspectRatio: "1:1",
   imageOptions: {
     height: 1024,
@@ -95,14 +44,15 @@ export const app = new Frog({
   },
   browserLocation: CAST_INTENS,
   headers: {
-    'cache-control': 'no-store, no-cache, must-revalidate, proxy-revalidate max-age=0, s-maxage=0',
+    "cache-control":
+      "no-store, no-cache, must-revalidate, proxy-revalidate max-age=0, s-maxage=0",
   },
 }).use(
   neynar({
-    apiKey: process.env.NEYNAR_API_KEY || 'NEYNAR_FROG_FM',
-    features: ['interactor', 'cast'],
-  }),
-)
+    apiKey: process.env.NEYNAR_API_KEY || "NEYNAR_FROG_FM",
+    features: ["interactor", "cast"],
+  })
+);
 
 // Function to format number
 function formatNumber(num: number) {
@@ -110,11 +60,11 @@ function formatNumber(num: number) {
     return (num / 1000).toFixed(1) + "K";
   }
   return num.toString();
-};
+}
 
 const sanitizeString = (input: string) => {
   // Remove any non-ASCII characters
-  return input.replace(/[^\x00-\x7F]/g, '');
+  return input.replace(/[^\x00-\x7F]/g, "");
 };
 
 const capitalize = (name: string) => {
@@ -124,7 +74,6 @@ const capitalize = (name: string) => {
 
 // URL for the public server
 const PUBLIC_URL = process.env.PUBLIC_URL || "http://localhost:5173";
-
 
 app.frame("/", (c) => {
   return c.res({
@@ -139,9 +88,9 @@ app.frame("/", (c) => {
 app.image("/initial-image", (c) => {
   return c.res({
     image: (
-      <Box 
-        grow 
-        flexDirection="column" 
+      <Box
+        grow
+        flexDirection="column"
         gap="8"
         textAlign="left"
         height="100%"
@@ -150,7 +99,7 @@ app.image("/initial-image", (c) => {
       >
         <Box flex="1" />
         <Box
-          backgroundColor="text_bg" 
+          backgroundColor="text_bg"
           paddingLeft="26"
           paddingRight="26"
           paddingTop="48"
@@ -158,39 +107,36 @@ app.image("/initial-image", (c) => {
           width="100%"
           flex="1"
         >
-          <text 
-            style={
-              {
-                border: "none",
-                color: "black",
-                fontSize: "80px",
-                fontWeight: "500",
-                width: "100%",
-                resize: "none",
-                outline: "none",
-                lineHeight: "1"
-              }
-            }
+          <text
+            style={{
+              border: "none",
+              color: "black",
+              fontSize: "80px",
+              fontWeight: "500",
+              width: "100%",
+              resize: "none",
+              outline: "none",
+              lineHeight: "1",
+            }}
           >
             Send your favorite tokens
           </text>
 
           <Spacer size="20" />
 
-          <text 
-            style={
-              {
-                border: "none",
-                color: "grey",
-                fontSize: "52px",
-                fontWeight: "400",
-                width: "100%",
-                resize: "none",
-                outline: "none",
-              }
-            }
+          <text
+            style={{
+              border: "none",
+              color: "grey",
+              fontSize: "52px",
+              fontWeight: "400",
+              width: "100%",
+              resize: "none",
+              outline: "none",
+            }}
           >
-            Pay Farcasters with any token you like, and they always get ETH on Base.
+            Pay Farcasters with any token you like, and they always get ETH on
+            Base.
           </text>
         </Box>
       </Box>
@@ -211,7 +157,7 @@ app.frame("/review", async (c) => {
           accept: "application/json",
           api_key: process.env.NEYNAR_API_KEY || "",
         },
-      },
+      }
     );
 
     // Fetch user by address
@@ -223,7 +169,7 @@ app.frame("/review", async (c) => {
           accept: "application/json",
           api_key: process.env.NEYNAR_API_KEY || "",
         },
-      },
+      }
     );
 
     // Check if at least one response is okay
@@ -280,29 +226,36 @@ app.frame("/review", async (c) => {
 app.image("/review-image/:toFid", async (c) => {
   const { toFid } = c.req.param();
 
-  const user = await fetchUserData(toFid);
+  const { data, error: fetchUserError } = await sdkInstance.getUsersByFid([
+    Number(toFid),
+  ]);
+  if (fetchUserError) throw new Error("Could not fetch user");
+  const user = data[0];
 
-  const pfpUrl = user.pfp_url;
-  
-  const parsedName = parseFullName(user.display_name);
-  
-  const displayName = capitalize(sanitizeString(parsedName.first || user.display_name));
+  const pfpUrl = user.pfpUrl;
+
+  const parsedName = parseFullName(user.displayName);
+
+  const displayName = capitalize(
+    sanitizeString(parsedName.first || user.displayName)
+  );
 
   const username = user.username;
 
-  const bio = user.profile.bio.text;
+  const bio = user.bio;
 
-  const followers = user.follower_count;
+  const followers = user.followerCount;
 
   return c.res({
     headers: {
-      "cache-control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0",
+      "cache-control":
+        "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0, s-maxage=0",
     },
     image: (
-      <Box 
-        grow 
-        backgroundColor="bg" 
-        flexDirection="column" 
+      <Box
+        grow
+        backgroundColor="bg"
+        flexDirection="column"
         gap="8"
         paddingTop="48"
         paddingLeft="28"
@@ -311,8 +264,7 @@ app.image("/review-image/:toFid", async (c) => {
         height="100%"
         width="100%"
       >
-
-        <Box backgroundColor="bg" flex="1" >
+        <Box backgroundColor="bg" flex="1">
           <Box
             grow
             backgroundColor="bg"
@@ -338,7 +290,7 @@ app.image("/review-image/:toFid", async (c) => {
               }}
             />
             <Spacer size="24" />
-            
+
             {/* Text Container */}
             <Box
               display="flex"
@@ -350,17 +302,14 @@ app.image("/review-image/:toFid", async (c) => {
                 @{username}
               </Text>
               <Spacer size="6" />
-  
+
               <Text align="left" weight="400" color="black" size="24">
-                {truncate(bio, 50) + (Buffer.byteLength(bio, 'utf8') > 50 ? '...' : '')}
+                {truncate(bio, 50) +
+                  (Buffer.byteLength(bio, "utf8") > 50 ? "..." : "")}
               </Text>
               <Spacer size="10" />
-  
-              <Box
-                display="flex"
-                flexDirection="row"
-                alignItems="center"
-              >
+
+              <Box display="flex" flexDirection="row" alignItems="center">
                 <Text align="left" weight="500" color="black" size="24">
                   {formatNumber(followers)}
                 </Text>
@@ -374,14 +323,10 @@ app.image("/review-image/:toFid", async (c) => {
         </Box>
 
         <Spacer size="60" />
-        
-        <Box backgroundColor="bg" flex="1" >
-          <Box
-            backgroundColor="bg"
-            display="flex"
-            flexDirection="column"
-          >
-            <text 
+
+        <Box backgroundColor="bg" flex="1">
+          <Box backgroundColor="bg" display="flex" flexDirection="column">
+            <text
               lang="en"
               style={{
                 border: "none",
@@ -391,15 +336,15 @@ app.image("/review-image/:toFid", async (c) => {
                 width: "100%",
                 resize: "none",
                 outline: "none",
-                lineHeight: "0.9"
+                lineHeight: "0.9",
               }}
             >
               Pay {displayName}
             </text>
 
             <Spacer size="10" />
-  
-            <text 
+
+            <text
               style={{
                 border: "none",
                 color: "grey",
@@ -415,8 +360,8 @@ app.image("/review-image/:toFid", async (c) => {
           </Box>
         </Box>
 
-        <Box backgroundColor="bg" flex="1" > 
-        <Box
+        <Box backgroundColor="bg" flex="1">
+          <Box
             borderRadius="14"
             padding="14"
             background="blue"
@@ -429,7 +374,7 @@ app.image("/review-image/:toFid", async (c) => {
                 <Icon name="undo" color="white" size="60" />
               </box>
               <Spacer size="10" />
-              <text 
+              <text
                 style={{
                   border: "none",
                   color: "white",
@@ -462,9 +407,13 @@ app.frame("/send/:toFid", async (c) => {
   const match = inputText ? inputText.match(inputPattern) : null;
 
   if (match) {
-    const user = await fetchUserData(toFid);
+    const { data, error: fetchUserError } = await sdkInstance.getUsersByFid([
+      Number(toFid),
+    ]);
+    if (fetchUserError) throw new Error("Could not fetch user");
+    const user = data[0];
 
-    const toEthAddress = user.verified_addresses.eth_addresses
+    const toEthAddress = user.ethAddresses
       .toString()
       .toLowerCase()
       .split(",")[0];
@@ -524,7 +473,7 @@ app.frame("/send/:toFid", async (c) => {
 
     try {
       const paymentCurrencyOnChain = (currencies as any)[paymentCurrency].on(
-        (chains as any)[chainId],
+        (chains as any)[chainId]
       );
       if (!paymentCurrencyOnChain) {
         return c.error({
@@ -544,7 +493,7 @@ app.frame("/send/:toFid", async (c) => {
     }
 
     const paymentCurrencyOnChain = (currencies as any)[paymentCurrency].on(
-      (chains as any)[chainId],
+      (chains as any)[chainId]
     );
 
     try {
@@ -557,7 +506,7 @@ app.frame("/send/:toFid", async (c) => {
           paymentAmount: Number(paymentAmount),
 
           address: toEthAddress as `0x${string}`,
-        },
+        }
       );
 
       if (!sponsoredTransaction) {
@@ -618,121 +567,105 @@ app.image(
     let paymentCurrencyLogoUrl;
     switch (chainStr) {
       case "Ethereum":
-        paymentCurrencyLogoUrl =
-          `${PUBLIC_URL}/chains/ethereum/icon.png`;
+        paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/ethereum/icon.png`;
         switch (paymentCurrencyUpperCase) {
           case "USDC":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/ethereum/tokens/usdc_eth.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/ethereum/tokens/usdc_eth.png`;
             break;
           case "USDT":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/ethereum/tokens/usdt_eth.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/ethereum/tokens/usdt_eth.png`;
             break;
         }
         break;
       case "Base":
-        paymentCurrencyLogoUrl =
-          `${PUBLIC_URL}/chains/base/icon.png`;
+        paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/base/icon.png`;
         switch (paymentCurrencyUpperCase) {
           case "ETH":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/base/tokens/eth_base.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/base/tokens/eth_base.png`;
             break;
           case "USDC":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/base/tokens/usdc_base.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/base/tokens/usdc_base.png`;
             break;
           case "DEGEN":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/base/tokens/degen_base.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/base/tokens/degen_base.png`;
             break;
         }
         break;
       case "Optimism":
-        paymentCurrencyLogoUrl =
-          `${PUBLIC_URL}/chains/optimism/icon.png`;
+        paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/optimism/icon.png`;
         switch (paymentCurrencyUpperCase) {
           case "ETH":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/optimism/tokens/eth_op.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/optimism/tokens/eth_op.png`;
             break;
           case "USDC":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/optimism/tokens/usdc_op.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/optimism/tokens/usdc_op.png`;
             break;
           case "USDT":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/optimism/tokens/usdt_op.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/optimism/tokens/usdt_op.png`;
             break;
         }
         break;
       case "Arbitrum":
-        paymentCurrencyLogoUrl =
-          `${PUBLIC_URL}/chains/arbitrum/icon.png`;
+        paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/arbitrum/icon.png`;
         switch (paymentCurrencyUpperCase) {
           case "USDC":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/arbitrum/tokens/usdc_arb.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/arbitrum/tokens/usdc_arb.png`;
             break;
           case "ETH":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/arbitrum/tokens/eth_arb.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/arbitrum/tokens/eth_arb.png`;
             break;
         }
         break;
       case "Polygon":
-        paymentCurrencyLogoUrl =
-          `${PUBLIC_URL}/chains/polygon/icon.png`;
+        paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/polygon/icon.png`;
         switch (paymentCurrencyUpperCase) {
           case "USDC":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/polygon/tokens/usdc_polygon.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/polygon/tokens/usdc_polygon.png`;
             break;
         }
         break;
       case "Degen":
-        paymentCurrencyLogoUrl =
-          `${PUBLIC_URL}/chains/degen/icon.png`;
+        paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/degen/icon.png`;
         break;
       case "Zora":
-        paymentCurrencyLogoUrl =
-          `${PUBLIC_URL}/chains/zora/icon.png`;
+        paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/zora/icon.png`;
         break;
       case "Avax":
-        paymentCurrencyLogoUrl =
-          `${PUBLIC_URL}/chains/avax/icon.png`;
+        paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/avax/icon.png`;
         switch (paymentCurrencyUpperCase) {
           case "USDC":
-            paymentCurrencyLogoUrl =
-              `${PUBLIC_URL}/chains/polygon/tokens/usdc_avax.png`;
+            paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/polygon/tokens/usdc_avax.png`;
             break;
         }
         break;
       case "Blast":
-        paymentCurrencyLogoUrl =
-          `${PUBLIC_URL}/chains/blast/icon.png`;
+        paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/blast/icon.png`;
         break;
       // Add other currencies as needed
       default:
-        paymentCurrencyLogoUrl =
-        `${PUBLIC_URL}/chains/base/icon.png`;
+        paymentCurrencyLogoUrl = `${PUBLIC_URL}/chains/base/icon.png`;
         break;
     }
 
-    const user = await fetchUserData(toFid);
+    const { data, error: fetchUserError } = await sdkInstance.getUsersByFid([
+      Number(toFid),
+    ]);
+    if (fetchUserError) throw new Error("Could not fetch user");
+    const user = data[0];
 
-    const pfpUrl = user.pfp_url;
+    const pfpUrl = user.pfpUrl;
 
-    const parsedName = parseFullName(user.display_name);
+    const parsedName = parseFullName(user.displayName);
 
-    const displayName = capitalize(sanitizeString(parsedName.first || user.display_name));
+    const displayName = capitalize(
+      sanitizeString(parsedName.first || user.displayName)
+    );
 
     const username = user.username;
 
-    const bio = user.profile.bio.text;
+    const bio = user.bio;
 
-    const followers = user.follower_count;
+    const followers = user.followerCount;
 
     return c.res({
       headers: {
@@ -740,10 +673,10 @@ app.image(
           "no-store, no-cache, must-revalidate, proxy-revalidate max-age=0, s-maxage=0",
       },
       image: (
-        <Box 
-          grow 
-          backgroundColor="bg" 
-          flexDirection="column" 
+        <Box
+          grow
+          backgroundColor="bg"
+          flexDirection="column"
           gap="8"
           paddingTop="48"
           paddingLeft="28"
@@ -753,8 +686,7 @@ app.image(
           height="100%"
           width="100%"
         >
-
-          <Box backgroundColor="bg" flex="1" >
+          <Box backgroundColor="bg" flex="1">
             <Box
               grow
               backgroundColor="bg"
@@ -780,7 +712,7 @@ app.image(
                 }}
               />
               <Spacer size="24" />
-              
+
               {/* Text Container */}
               <Box
                 display="flex"
@@ -792,17 +724,14 @@ app.image(
                   @{username}
                 </Text>
                 <Spacer size="6" />
-    
+
                 <Text align="left" weight="400" color="black" size="24">
-                  {truncate(bio, 60) + (Buffer.byteLength(bio, 'utf8') > 60 ? '...' : '')}
+                  {truncate(bio, 60) +
+                    (Buffer.byteLength(bio, "utf8") > 60 ? "..." : "")}
                 </Text>
                 <Spacer size="10" />
-    
-                <Box
-                  display="flex"
-                  flexDirection="row"
-                  alignItems="center"
-                >
+
+                <Box display="flex" flexDirection="row" alignItems="center">
                   <Text align="left" weight="500" color="black" size="24">
                     {formatNumber(followers)}
                   </Text>
@@ -816,14 +745,14 @@ app.image(
           </Box>
 
           <Spacer size="80" />
-          
+
           <Box
             backgroundColor="bg"
             display="flex"
             flexDirection="column"
             flex="1"
           >
-            <text 
+            <text
               style={{
                 border: "none",
                 color: "black",
@@ -832,15 +761,15 @@ app.image(
                 width: "100%",
                 resize: "none",
                 outline: "none",
-                lineHeight: "0.9"
+                lineHeight: "0.9",
               }}
             >
               Pay {displayName}
             </text>
 
             <Spacer size="10" />
-  
-            <text 
+
+            <text
               style={{
                 border: "none",
                 color: "grey",
@@ -851,7 +780,8 @@ app.image(
                 outline: "none",
               }}
             >
-              You are sending {displayPaymentAmount} {paymentCurrencyUpperCase} on{" "}{chainStr}.
+              You are sending {displayPaymentAmount} {paymentCurrencyUpperCase}{" "}
+              on {chainStr}.
             </text>
           </Box>
 
@@ -863,8 +793,8 @@ app.image(
             justifyContent="space-between"
           >
             {/* You Send Section */}
-            <Box 
-              backgroundColor="bg" 
+            <Box
+              backgroundColor="bg"
               flex="2"
               alignHorizontal="left"
               padding="0"
@@ -872,9 +802,9 @@ app.image(
               <Text align="right" weight="600" color="grey" size="20">
                 YOU SEND
               </Text>
-    
+
               <Spacer size="8" />
-  
+
               <Box flexDirection="row">
                 <Image
                   width="28"
@@ -883,7 +813,7 @@ app.image(
                   src={paymentCurrencyLogoUrl}
                 />
                 <Spacer size="8" />
-                <text 
+                <text
                   style={{
                     border: "none",
                     color: "black",
@@ -898,7 +828,7 @@ app.image(
                 </text>
               </Box>
             </Box>
-      
+
             {/* Arrow Icon */}
             <Box
               backgroundColor="bg"
@@ -909,13 +839,9 @@ app.image(
             >
               <Icon name="move-right" color="grey" size="60" />
             </Box>
-      
+
             {/* They Receive Section */}
-            <Box
-              backgroundColor="bg"
-              flex="2"
-              alignHorizontal="right"
-            >
+            <Box backgroundColor="bg" flex="2" alignHorizontal="right">
               <Text align="right" weight="600" color="grey" size="20">
                 THEY RECEIVE
               </Text>
@@ -928,7 +854,7 @@ app.image(
                   src={`${PUBLIC_URL}/chains/base/tokens/eth_base.png`}
                 />
                 <Spacer size="8" />
-                <text 
+                <text
                   style={{
                     border: "none",
                     color: "black",
@@ -943,9 +869,9 @@ app.image(
             </Box>
           </Box>
         </Box>
-      ),    
+      ),
     });
-  },
+  }
 );
 
 app.transaction(
@@ -966,7 +892,7 @@ app.transaction(
 
     const { unsignedTransaction } = await getSessionById(
       glideConfig,
-      sessionId,
+      sessionId
     );
 
     if (!unsignedTransaction) {
@@ -979,7 +905,7 @@ app.transaction(
       data: unsignedTransaction.input || undefined,
       value: hexToBigInt(unsignedTransaction.value),
     });
-  },
+  }
 );
 
 app.frame(
@@ -987,12 +913,8 @@ app.frame(
   async (c) => {
     const { transactionId, buttonValue } = c;
 
-    const {
-      sessionId,
-      fromFid,
-      toFid,
-      displayReceivedEthValue,
-    } = c.req.param();
+    const { sessionId, fromFid, toFid, displayReceivedEthValue } =
+      c.req.param();
 
     // The payment transaction hash is passed with transactionId if the user just completed the payment. If the user hit the "Refresh" button, the transaction hash is passed with buttonValue.
     const txHash = transactionId || buttonValue;
@@ -1062,29 +984,28 @@ app.frame(
         ],
       });
     }
-  },
+  }
 );
-
 
 app.image(
   "/tx-processing/:fromFid/:toFid/:displayReceivedEthValue",
   async (c) => {
-    const {
-      fromFid,
-      toFid,
-      displayReceivedEthValue,
-    } = c.req.param();
+    const { fromFid, toFid, displayReceivedEthValue } = c.req.param();
 
-    const [fromUser, toUser] = await Promise.all([
-      fetchUserData(fromFid),
-      fetchUserData(toFid),
+    const { data, error: fetchUserError } = await sdkInstance.getUsersByFid([
+      Number(toFid),
+      Number(fromFid),
     ]);
+    if (fetchUserError) throw new Error("Could not fetch user");
+    const [toUser, fromUser] = data;
 
-    const fromPfpUrl = fromUser.pfp_url;
-    const toPfpUrl = toUser.pfp_url;
+    const fromPfpUrl = fromUser.pfpUrl;
+    const toPfpUrl = toUser.pfpUrl;
 
-    const parsedName = parseFullName(toUser.display_name);
-    const toDisplayName = capitalize(sanitizeString(parsedName.first || toUser.display_name));
+    const parsedName = parseFullName(toUser.displayName);
+    const toDisplayName = capitalize(
+      sanitizeString(parsedName.first || toUser.displayName)
+    );
 
     return c.res({
       image: (
@@ -1097,7 +1018,6 @@ app.image(
           height="100%"
           width="100%"
         >
-
           <Box
             grow
             backgroundColor="green"
@@ -1142,7 +1062,7 @@ app.image(
             </Box>
           </Box>
 
-          <text 
+          <text
             style={{
               color: "black",
               fontSize: "80px",
@@ -1154,12 +1074,9 @@ app.image(
           </text>
 
           <Spacer size="10" />
-          
-          <Box
-            paddingLeft="160"
-            paddingRight="160"
-          >
-            <text 
+
+          <Box paddingLeft="160" paddingRight="160">
+            <text
               style={{
                 color: "grey",
                 fontSize: "42px",
@@ -1167,7 +1084,8 @@ app.image(
                 textAlign: "center",
               }}
             >
-              {toDisplayName} will receive {displayReceivedEthValue} ETH on Base.
+              {toDisplayName} will receive {displayReceivedEthValue} ETH on
+              Base.
             </text>
           </Box>
 
@@ -1186,7 +1104,7 @@ app.image(
           >
             <Icon name="clock" color="process" size="30" />
             <Spacer size="6" />
-            <text 
+            <text
               style={{
                 color: "black",
                 fontSize: "42px",
@@ -1200,151 +1118,141 @@ app.image(
         </Box>
       ),
     });
-  },
+  }
 );
 
+app.image("/tx-success/:fromFid/:toFid/:displayReceivedEthValue", async (c) => {
+  const { fromFid, toFid, displayReceivedEthValue } = c.req.param();
 
-app.image(
-  "/tx-success/:fromFid/:toFid/:displayReceivedEthValue",
-  async (c) => {
-    const {
-      fromFid,
-      toFid,
-      displayReceivedEthValue,
-    } = c.req.param();
+  const { data, error: fetchUserError } = await sdkInstance.getUsersByFid([
+    Number(toFid),
+    Number(fromFid),
+  ]);
+  if (fetchUserError) throw new Error("Could not fetch user");
+  const [toUser, fromUser] = data;
 
-    const [fromUser, toUser] = await Promise.all([
-      fetchUserData(fromFid),
-      fetchUserData(toFid),
-    ]);
+  const fromPfpUrl = fromUser.pfpUrl;
+  const toPfpUrl = toUser.pfpUrl;
 
-    const fromPfpUrl = fromUser.pfp_url;
-    const toPfpUrl = toUser.pfp_url;
+  const parsedName = parseFullName(toUser.displayName);
+  const toDisplayName = capitalize(
+    sanitizeString(parsedName.first || toUser.displayName)
+  );
 
-    const parsedName = parseFullName(toUser.display_name);
-    const toDisplayName = capitalize(sanitizeString(parsedName.first || toUser.display_name));
-
-    return c.res({
-      image: (
+  return c.res({
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="bg"
+        paddingBottom="48"
+        textAlign="center"
+        height="100%"
+        width="100%"
+      >
         <Box
           grow
+          backgroundColor="green"
+          position="relative"
+          display="flex"
+          justifyContent="center"
           alignHorizontal="center"
-          backgroundColor="bg"
-          paddingBottom="48"
-          textAlign="center"
-          height="100%"
-          width="100%"
+          marginLeft="10"
         >
-
           <Box
-            grow
-            backgroundColor="green"
-            position="relative"
+            position="absolute"
             display="flex"
             justifyContent="center"
-            alignHorizontal="center"
-            marginLeft="10"
+            backgroundColor="green"
+            marginTop="160"
           >
-            <Box
-              position="absolute"
-              display="flex"
-              justifyContent="center"
-              backgroundColor="green"
-              marginTop="160"
-            >
-              <img
-                height="256"
-                width="256"
-                src={fromPfpUrl}
-                style={{
-                  border: "2px solid #DDDDDD",
-                  borderRadius: "50%",
-                  objectFit: "cover",
-                  position: "absolute",
-                  right: 0,
-                }}
-              />
+            <img
+              height="256"
+              width="256"
+              src={fromPfpUrl}
+              style={{
+                border: "2px solid #DDDDDD",
+                borderRadius: "50%",
+                objectFit: "cover",
+                position: "absolute",
+                right: 0,
+              }}
+            />
 
-              <img
-                height="256"
-                width="256"
-                src={toPfpUrl}
-                style={{
-                  border: "2px solid #DDDDDD",
-                  borderRadius: "50%",
-                  objectFit: "cover",
-                  position: "absolute",
-                  left: "-30px",
-                }}
-              />
-            </Box>
+            <img
+              height="256"
+              width="256"
+              src={toPfpUrl}
+              style={{
+                border: "2px solid #DDDDDD",
+                borderRadius: "50%",
+                objectFit: "cover",
+                position: "absolute",
+                left: "-30px",
+              }}
+            />
           </Box>
+        </Box>
 
-          <text 
+        <text
+          style={{
+            color: "black",
+            fontSize: "80px",
+            fontWeight: "500",
+            textAlign: "center",
+          }}
+        >
+          Sent!
+        </text>
+
+        <Spacer size="10" />
+
+        <Box paddingLeft="160" paddingRight="160">
+          <text
+            style={{
+              color: "grey",
+              fontSize: "42px",
+              fontWeight: "400",
+              textAlign: "center",
+            }}
+          >
+            {toDisplayName} will receive {displayReceivedEthValue} ETH on Base.
+          </text>
+        </Box>
+
+        <Spacer size="96" />
+
+        <Text align="center" weight="600" color="grey" size="20">
+          STATUS
+        </Text>
+
+        <Spacer size="10" />
+
+        <Box
+          flexDirection="row"
+          alignItems="flex-start"
+          justifyContent="center"
+        >
+          <Icon name="circle-check" color="green" size="30" />
+          <Spacer size="6" />
+          <text
             style={{
               color: "black",
-              fontSize: "80px",
+              fontSize: "42px",
               fontWeight: "500",
               textAlign: "center",
             }}
           >
-            Sent!
+            Success
           </text>
-
-          <Spacer size="10" />
-          
-          <Box
-            paddingLeft="160"
-            paddingRight="160"
-          >
-            <text 
-              style={{
-                color: "grey",
-                fontSize: "42px",
-                fontWeight: "400",
-                textAlign: "center",
-              }}
-            >
-              {toDisplayName} will receive {displayReceivedEthValue} ETH on Base.
-            </text>
-          </Box>
-
-          <Spacer size="96" />
-
-          <Text align="center" weight="600" color="grey" size="20">
-            STATUS
-          </Text>
-
-          <Spacer size="10" />
-
-          <Box
-            flexDirection="row"
-            alignItems="flex-start"
-            justifyContent="center"
-          >
-            <Icon name="circle-check" color="green" size="30" />
-            <Spacer size="6" />
-            <text 
-              style={{
-                color: "black",
-                fontSize: "42px",
-                fontWeight: "500",
-                textAlign: "center",
-              }}
-            >
-              Success
-            </text>
-          </Box>
         </Box>
-      ),
-    });
-  },
-);
-
+      </Box>
+    ),
+  });
+});
 
 // Uncomment for local server testing
 // devtools(app, { serveStatic });
 
-
-export const GET = handle(app)
-export const POST = handle(app)
+export const GET = handle(app);
+export const POST = handle(app);
